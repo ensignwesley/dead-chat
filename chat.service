@@ -1,0 +1,16 @@
+[Unit]
+Description=Dead Chat - Real-time WebSocket chat room
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/jarvis/chat
+ExecStart=/usr/bin/node /home/jarvis/chat/server.js
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=dead-chat
+
+[Install]
+WantedBy=default.target
