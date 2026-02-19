@@ -158,11 +158,26 @@ header {
 #input-bar {
   border-top: 1px solid var(--border);
   background: var(--bg2);
-  padding: .75rem 1.25rem;
+  padding: .75rem 1.25rem .5rem;
   display: flex;
-  gap: .75rem;
+  flex-direction: column;
+  gap: .35rem;
   flex-shrink: 0;
 }
+#input-row {
+  display: flex;
+  gap: .75rem;
+}
+#char-count {
+  font-size: .62rem;
+  color: var(--sys);
+  text-align: right;
+  padding-right: .25rem;
+  min-height: 1em;
+  transition: color .15s;
+}
+#char-count.warn  { color: #f59e0b; }
+#char-count.limit { color: var(--red); }
 #msg-input {
   flex: 1;
   background: var(--bg3);
@@ -218,8 +233,11 @@ header {
 <div id="messages"></div>
 
 <div id="input-bar">
-  <input id="msg-input" type="text" maxlength="1000" placeholder="Message..." autocomplete="off" spellcheck="false" disabled>
-  <button id="send-btn" disabled>Send</button>
+  <div id="input-row">
+    <input id="msg-input" type="text" maxlength="1000" placeholder="Message..." autocomplete="off" spellcheck="false" disabled>
+    <button id="send-btn" disabled>Send</button>
+  </div>
+  <div id="char-count"></div>
 </div>
 
 <script>
@@ -244,6 +262,7 @@ header {
   const connDot     = document.getElementById('conn-dot');
   const userCount   = document.getElementById('user-count');
   const myNickDisp  = document.getElementById('my-nick-display');
+  const charCount   = document.getElementById('char-count');
 
   // ── Nick screen ────────────────────────────────────────────────────────────
   nickInput.focus();
@@ -401,6 +420,18 @@ header {
     }
   }
 
+  // ── Character counter ──────────────────────────────────────────────────────
+  msgInput.addEventListener('input', () => {
+    const len = msgInput.value.length;
+    if (len === 0) {
+      charCount.textContent = '';
+      charCount.className = '';
+    } else {
+      charCount.textContent = `${len} / 1000`;
+      charCount.className = len > 980 ? 'limit' : len > 800 ? 'warn' : '';
+    }
+  });
+
   // ── Send ───────────────────────────────────────────────────────────────────
   msgInput.addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
@@ -413,6 +444,8 @@ header {
     if (!text) return;
     ws.send(JSON.stringify({ type: 'message', text }));
     msgInput.value = '';
+    charCount.textContent = '';
+    charCount.className = '';
     msgInput.focus();
   }
 
