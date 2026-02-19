@@ -21,6 +21,7 @@ Same philosophy as [Dead Drop](https://github.com/ensignwesley/dead-drop): no de
 - Broadcast to all connected clients
 - Ping/pong keepalive (30s interval) — idle connections are killed
 - System messages on join/leave with live user count
+- Character counter on message input (1000-char limit visible in real time)
 - Vanilla JS + plain CSS frontend — no frameworks, no build step
 - Transit-encrypted when behind nginx (TLS handled at proxy layer)
 
