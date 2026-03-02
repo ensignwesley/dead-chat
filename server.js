@@ -340,6 +340,19 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // GET /chat/health → lightweight health beacon
+  if (pathname === '/chat/health') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      ok: true,
+      service: 'dead-chat',
+      version: '1.0',
+      connected_clients: clients.size,
+      ts: Date.now(),
+    }));
+    return;
+  }
+
   res.writeHead(404);
   res.end('Not found');
 });
