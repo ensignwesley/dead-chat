@@ -25,7 +25,8 @@ const PORT            = 3002;
 const MAX_HISTORY     = 50;       // messages to send on join
 const MAX_NICK_LEN    = 24;
 const MAX_MSG_LEN     = 1000;
-const PING_INTERVAL_MS = 30_000;
+const PING_INTERVAL_MS  = 30_000;
+const PONG_TIMEOUT_MS   = 10_000;  // drop connection if no pong within this window
 const MAX_CLIENTS     = 100;      // concurrent WebSocket connection cap
 const RATE_LIMIT_MSG  = 5;        // max messages per RATE_LIMIT_WINDOW_MS
 const RATE_LIMIT_WIN  = 1000;     // window in ms
@@ -196,10 +197,11 @@ function handleUpgrade(req, socket) {
   const client = {
     id,
     nick,
-    alive: true,
-    buf: Buffer.alloc(0),
-    rateCount: 0,           // messages in current window
-    rateStart: Date.now(),  // start of current rate window
+    alive:      true,
+    pongTimer:  null,       // per-connection timeout; set after each ping, cleared on pong
+    buf:        Buffer.alloc(0),
+    rateCount:  0,          // messages in current window
+    rateStart:  Date.now(), // start of current rate window
   };
   clients.set(socket, client);
 
@@ -245,8 +247,9 @@ function handleUpgrade(req, socket) {
       }
 
       if (frame.opcode === 0xA) {
-        // Pong — mark alive
+        // Pong — mark alive, cancel the pong timeout
         client.alive = true;
+        if (client.pongTimer) { clearTimeout(client.pongTimer); client.pongTimer = null; }
         continue;
       }
 
@@ -289,6 +292,7 @@ function handleUpgrade(req, socket) {
   // ── Disconnect ────────────────────────────────────────────────────────────
   function onClose() {
     if (!clients.has(socket)) return;
+    if (client.pongTimer) { clearTimeout(client.pongTimer); client.pongTimer = null; }
     clients.delete(socket);
     console.log(`[leave] nick=${nick} id=${id} total=${clients.size}`);
     const leaveMsg = { type: 'system', text: `${nick} left`, ts: Date.now(), count: clients.size };
@@ -304,17 +308,38 @@ function handleUpgrade(req, socket) {
 }
 
 // ── Keepalive ping loop ───────────────────────────────────────────────────────
+// Sends a PING every PING_INTERVAL_MS. Each connection gets a per-connection
+// PONG_TIMEOUT_MS timer; if no pong arrives in that window the connection is
+// destroyed immediately. The alive-flag check below is a belt-and-suspenders
+// backstop for connections that somehow slipped through the timer.
 setInterval(() => {
   for (const [sock, client] of clients) {
     if (sock.destroyed) { clients.delete(sock); continue; }
+
+    // Belt-and-suspenders: alive flag should already be reset by pong timer,
+    // but catch anything that slipped through
     if (!client.alive) {
-      console.log(`[timeout] nick=${client.nick} id=${client.id}`);
+      console.log(`[timeout] nick=${client.nick} id=${client.id} — missed ping cycle`);
+      if (client.pongTimer) { clearTimeout(client.pongTimer); client.pongTimer = null; }
       sock.destroy();
       clients.delete(sock);
       continue;
     }
+
     client.alive = false;
-    try { sock.write(buildPing()); } catch {}
+
+    // Clear any previous timer before sending a new ping
+    if (client.pongTimer) { clearTimeout(client.pongTimer); client.pongTimer = null; }
+
+    try { sock.write(buildPing()); } catch { continue; }
+
+    // Start the pong timeout — if no pong within PONG_TIMEOUT_MS, drop the connection
+    client.pongTimer = setTimeout(() => {
+      if (sock.destroyed) return;
+      console.log(`[pong-timeout] nick=${client.nick} id=${client.id} — no pong in ${PONG_TIMEOUT_MS}ms`);
+      sock.destroy();
+      clients.delete(sock);
+    }, PONG_TIMEOUT_MS);
   }
 }, PING_INTERVAL_MS);
 
