@@ -42,6 +42,7 @@ nginx (TLS termination)
 
 server.js (326 lines, zero deps)
   ├── HTTP server  → serves index.html
+  ├── GET /chat/health → JSON health beacon { ok, service, version, connected_clients, ts }
   ├── Upgrade handler → RFC 6455 WebSocket handshake
   ├── Frame parser → opcode routing (text/ping/pong/close)
   ├── Rate limiter → 5 msg/sec sliding window, kick on violation
