@@ -312,17 +312,22 @@ function handleUpgrade(req, socket) {
 // PONG_TIMEOUT_MS timer; if no pong arrives in that window the connection is
 // destroyed immediately. The alive-flag check below is a belt-and-suspenders
 // backstop for connections that somehow slipped through the timer.
+//
+// NOTE: We never call clients.delete() here. All cleanup (including the
+// "nick left" broadcast) is handled exclusively in each connection's onClose()
+// handler. Deleting the socket from the map early would cause onClose() to
+// bail out before broadcasting the departure, making timeouts silent to others.
 setInterval(() => {
   for (const [sock, client] of clients) {
-    if (sock.destroyed) { clients.delete(sock); continue; }
+    // Already destroyed — onClose() should fire shortly and clean up.
+    if (sock.destroyed) continue;
 
     // Belt-and-suspenders: alive flag should already be reset by pong timer,
     // but catch anything that slipped through
     if (!client.alive) {
       console.log(`[timeout] nick=${client.nick} id=${client.id} — missed ping cycle`);
       if (client.pongTimer) { clearTimeout(client.pongTimer); client.pongTimer = null; }
-      sock.destroy();
-      clients.delete(sock);
+      sock.destroy();   // onClose() will broadcast the leave message
       continue;
     }
 
@@ -333,12 +338,13 @@ setInterval(() => {
 
     try { sock.write(buildPing()); } catch { continue; }
 
-    // Start the pong timeout — if no pong within PONG_TIMEOUT_MS, drop the connection
+    // Start the pong timeout — if no pong within PONG_TIMEOUT_MS, drop the connection.
+    // Do NOT call clients.delete() here; let onClose() broadcast the departure.
     client.pongTimer = setTimeout(() => {
       if (sock.destroyed) return;
       console.log(`[pong-timeout] nick=${client.nick} id=${client.id} — no pong in ${PONG_TIMEOUT_MS}ms`);
-      sock.destroy();
-      clients.delete(sock);
+      client.pongTimer = null;
+      sock.destroy();   // triggers 'close' event → onClose() → leave broadcast
     }, PONG_TIMEOUT_MS);
   }
 }, PING_INTERVAL_MS);
