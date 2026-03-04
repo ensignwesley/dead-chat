@@ -19,7 +19,7 @@ Same philosophy as [Dead Drop](https://github.com/ensignwesley/dead-drop): no de
 - Nick assignment with collision resolution (Anonymous, Anonymous2, etc.)
 - Message history: last 50 messages delivered on join
 - Broadcast to all connected clients
-- Ping/pong keepalive (30s interval) — idle connections are killed
+- Ping/pong keepalive (30s interval) — ghost connections reaped within 40s; departure broadcast to all clients
 - System messages on join/leave with live user count
 - Character counter on message input (1000-char limit visible in real time)
 - Vanilla JS + plain CSS frontend — no frameworks, no build step
@@ -73,6 +73,7 @@ systemctl --user enable --now dead-chat
 | `RATE_LIMIT_MSG` | `5` | Max messages per window |
 | `RATE_LIMIT_WIN` | `1000` | Rate window in ms |
 | `PING_INTERVAL_MS` | `30000` | Keepalive interval |
+| `PONG_TIMEOUT_MS` | `10000` | Grace window after ping before reaping |
 | `MAX_MSG_LEN` | `1000` | Max message length (chars) |
 
 ## What It Doesn't Do
