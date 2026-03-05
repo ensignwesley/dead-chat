@@ -29,6 +29,7 @@ Same philosophy as [Dead Drop](https://github.com/ensignwesley/dead-drop): no de
 
 - **Rate limiting:** 5 messages/sec per client — violation kicks the connection
 - **Max connections:** 100 concurrent WebSocket connections — 503 on overflow
+- **Per-IP connection cap:** 5 concurrent connections per IP — 429 on overflow (prevents single-IP slot exhaustion)
 - **Origin logging:** Upgrade origin is logged for audit (not enforced — public chat)
 - **Frame validation:** Malformed frames are silently discarded
 - **Nick sanitization:** `[^\w\-. ]` stripped, max 24 chars
@@ -40,10 +41,10 @@ nginx (TLS termination)
   └── /chat/ws  → ws://127.0.0.1:3002/chat/ws  (WebSocket upgrade)
   └── /chat     → http://127.0.0.1:3002/chat    (static HTML)
 
-server.js (326 lines, zero deps)
+server.js (444 lines, zero deps)
   ├── HTTP server  → serves index.html
   ├── GET /chat/health → JSON health beacon { ok, service, version, connected_clients, ts }
-  ├── Upgrade handler → RFC 6455 WebSocket handshake
+  ├── Upgrade handler → RFC 6455 WebSocket handshake (global + per-IP caps enforced here)
   ├── Frame parser → opcode routing (text/ping/pong/close)
   ├── Rate limiter → 5 msg/sec sliding window, kick on violation
   └── Ping loop   → 30s interval, kills dead connections
@@ -54,7 +55,7 @@ server.js (326 lines, zero deps)
 ```bash
 node server.js
 # [chat] Listening on http://127.0.0.1:3002
-# [chat] Max clients: 100 | Rate limit: 5 msg/1000ms
+# [chat] Max clients: 100 | Per-IP cap: 5 | Rate limit: 5 msg/1000ms
 ```
 
 Or with systemd (user service, linger-enabled):
@@ -69,7 +70,8 @@ systemctl --user enable --now dead-chat
 |---|---|---|
 | `PORT` | `3002` | Listen port |
 | `MAX_HISTORY` | `50` | Messages sent on join |
-| `MAX_CLIENTS` | `100` | Concurrent connection cap |
+| `MAX_CLIENTS` | `100` | Global concurrent connection cap |
+| `MAX_CLIENTS_PER_IP` | `5` | Per-IP concurrent connection cap |
 | `RATE_LIMIT_MSG` | `5` | Max messages per window |
 | `RATE_LIMIT_WIN` | `1000` | Rate window in ms |
 | `PING_INTERVAL_MS` | `30000` | Keepalive interval |

@@ -5,9 +5,10 @@
  * Zero external dependencies. Pure Node.js built-ins.
  * Implements RFC 6455 WebSocket protocol from scratch.
  *
- * Security hardening (2026-02-19):
+ * Security hardening (2026-02-19, 2026-03-05):
  * - Per-client rate limiting: 5 msg/sec, kick on violation
- * - Max concurrent connections: 100
+ * - Max concurrent connections: 100 (global)
+ * - Per-IP connection cap: 5 (prevents single-IP slot exhaustion)
  * - Origin check: logged but not enforced (public chat — low risk, documented)
  * - No E2E encryption claim — TLS is nginx's job, not ours
  */
@@ -28,18 +29,26 @@ const MAX_MSG_LEN     = 1000;
 const PING_INTERVAL_MS  = 30_000;
 const PONG_TIMEOUT_MS   = 10_000;  // drop connection if no pong within this window
 const MAX_CLIENTS     = 100;      // concurrent WebSocket connection cap
+const MAX_CLIENTS_PER_IP = 5;    // max concurrent connections from one IP
 const RATE_LIMIT_MSG  = 5;        // max messages per RATE_LIMIT_WINDOW_MS
 const RATE_LIMIT_WIN  = 1000;     // window in ms
 const WS_MAGIC = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 
 // ── State ─────────────────────────────────────────────────────────────────────
-const clients = new Map();   // socket → { id, nick, alive, buf, rateCount, rateStart }
+const clients = new Map();   // socket → { id, nick, alive, buf, rateCount, rateStart, ip }
+const ipCounts = new Map();  // ip → number of active connections
 let nextId = 1;
 const history = [];          // ring buffer of last MAX_HISTORY messages
 
 function addToHistory(msg) {
   history.push(msg);
   if (history.length > MAX_HISTORY) history.shift();
+}
+
+// ── IP helpers ────────────────────────────────────────────────────────────────
+function getClientIP(req) {
+  // nginx sets X-Real-IP to $remote_addr — use that as the canonical source
+  return req.headers['x-real-ip'] || req.socket.remoteAddress || 'unknown';
 }
 
 // ── WebSocket: handshake ──────────────────────────────────────────────────────
@@ -187,6 +196,16 @@ function handleUpgrade(req, socket) {
     return;
   }
 
+  // ── Per-IP connection cap ─────────────────────────────────────────────────
+  const ip = getClientIP(req);
+  const ipCount = ipCounts.get(ip) || 0;
+  if (ipCount >= MAX_CLIENTS_PER_IP) {
+    console.log(`[reject-ip] ip=${ip} count=${ipCount} — per-IP limit reached (${MAX_CLIENTS_PER_IP})`);
+    socket.write('HTTP/1.1 429 Too Many Requests\r\nContent-Length: 0\r\n\r\n');
+    socket.destroy();
+    return;
+  }
+
   if (!doHandshake(socket, req)) return;
 
   const parsed = url.parse(req.url, true);
@@ -194,9 +213,13 @@ function handleUpgrade(req, socket) {
   const nick = uniqueNick(sanitizeNick(rawNick));
   const id = nextId++;
 
+  // Track per-IP count
+  ipCounts.set(ip, (ipCounts.get(ip) || 0) + 1);
+
   const client = {
     id,
     nick,
+    ip,
     alive:      true,
     pongTimer:  null,       // per-connection timeout; set after each ping, cleared on pong
     buf:        Buffer.alloc(0),
@@ -294,6 +317,13 @@ function handleUpgrade(req, socket) {
     if (!clients.has(socket)) return;
     if (client.pongTimer) { clearTimeout(client.pongTimer); client.pongTimer = null; }
     clients.delete(socket);
+    // Decrement per-IP count
+    const remaining = (ipCounts.get(ip) || 1) - 1;
+    if (remaining <= 0) {
+      ipCounts.delete(ip);
+    } else {
+      ipCounts.set(ip, remaining);
+    }
     console.log(`[leave] nick=${nick} id=${id} total=${clients.size}`);
     const leaveMsg = { type: 'system', text: `${nick} left`, ts: Date.now(), count: clients.size };
     addToHistory(leaveMsg);
@@ -405,7 +435,7 @@ server.on('upgrade', (req, socket, _head) => {
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`[chat] Listening on http://127.0.0.1:${PORT}`);
   console.log(`[chat] WebSocket endpoint: ws://127.0.0.1:${PORT}/chat/ws`);
-  console.log(`[chat] Max clients: ${MAX_CLIENTS} | Rate limit: ${RATE_LIMIT_MSG} msg/${RATE_LIMIT_WIN}ms`);
+  console.log(`[chat] Max clients: ${MAX_CLIENTS} | Per-IP cap: ${MAX_CLIENTS_PER_IP} | Rate limit: ${RATE_LIMIT_MSG} msg/${RATE_LIMIT_WIN}ms`);
 });
 
 process.on('SIGTERM', () => {
