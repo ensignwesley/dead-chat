@@ -21,6 +21,9 @@ const url = require('url');
 const fs = require('fs');
 const path = require('path');
 
+// ── Process start time (for uptime reporting) ─────────────────────────────────
+const START_TIME = Date.now();
+
 // ── Config ────────────────────────────────────────────────────────────────────
 const PORT            = 3002;
 const MAX_HISTORY     = 50;       // messages to send on join
@@ -407,8 +410,9 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify({
       ok: true,
       service: 'dead-chat',
-      version: '1.0',
+      version: '1.1',
       connected_clients: clients.size,
+      uptime_seconds: Math.floor((Date.now() - START_TIME) / 1000),
       ts: Date.now(),
     }));
     return;
