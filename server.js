@@ -444,5 +444,12 @@ server.listen(PORT, '127.0.0.1', () => {
 
 process.on('SIGTERM', () => {
   console.log('[chat] Shutting down');
+  // Destroy all open client sockets so server.close() callback fires promptly.
+  // Without this, keepalive pings hold connections open and systemd SIGKILL's us.
+  for (const sock of clients.keys()) {
+    sock.destroy();
+  }
   server.close(() => process.exit(0));
+  // Hard exit fallback in case server.close stalls (e.g. non-WebSocket connections)
+  setTimeout(() => process.exit(0), 2000).unref();
 });
