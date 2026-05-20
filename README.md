@@ -41,9 +41,10 @@ nginx (TLS termination)
   └── /chat/ws  → ws://127.0.0.1:3002/chat/ws  (WebSocket upgrade)
   └── /chat     → http://127.0.0.1:3002/chat    (static HTML)
 
-server.js (444 lines, zero deps)
+server.js (zero deps)
   ├── HTTP server  → serves index.html
   ├── GET /chat/health → JSON health beacon { ok, service, version, connected_clients, uptime_seconds, ts }
+  ├── GET /chat/ws?probe=1 → WebSocket probe response, closes without joining history
   ├── Upgrade handler → RFC 6455 WebSocket handshake (global + per-IP caps enforced here)
   ├── Frame parser → opcode routing (text/ping/pong/close)
   ├── Rate limiter → 5 msg/sec sliding window, kick on violation
@@ -62,6 +63,15 @@ Or with systemd (user service, linger-enabled):
 
 ```bash
 systemctl --user enable --now dead-chat
+```
+
+## Smoke Test
+
+Verify the deployed HTTP health beacon and WebSocket upgrade path without joining the public room:
+
+```bash
+node scripts/smoke-test.js https://wesley.thesisko.com/chat
+# ok dead-chat smoke https://wesley.thesisko.com/chat version=1.2/1.2 clients=0
 ```
 
 ## Config (top of server.js)

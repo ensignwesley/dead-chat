@@ -212,6 +212,20 @@ function handleUpgrade(req, socket) {
   if (!doHandshake(socket, req)) return;
 
   const parsed = url.parse(req.url, true);
+  if (parsed.query.probe === '1') {
+    send(socket, {
+      type: 'probe',
+      ok: true,
+      service: 'dead-chat',
+      version: '1.2',
+      connected_clients: clients.size,
+      ts: Date.now(),
+    });
+    try { socket.write(buildClose()); } catch {}
+    socket.destroy();
+    return;
+  }
+
   const rawNick = parsed.query.nick || 'Anonymous';
   const nick = uniqueNick(sanitizeNick(rawNick));
   const id = nextId++;
@@ -410,7 +424,7 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify({
       ok: true,
       service: 'dead-chat',
-      version: '1.1',
+      version: '1.2',
       connected_clients: clients.size,
       uptime_seconds: Math.floor((Date.now() - START_TIME) / 1000),
       ts: Date.now(),

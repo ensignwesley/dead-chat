@@ -1,0 +1,68 @@
+#!/usr/bin/env node
+'use strict';
+
+/**
+ * DEAD//CHAT deployed smoke test.
+ *
+ * Checks both the HTTP health beacon and the WebSocket upgrade path without
+ * joining the public room or adding join/leave noise to in-memory history.
+ * Requires Node 22+ for built-in fetch + WebSocket.
+ */
+
+const assert = require('assert/strict');
+
+const rawBase = process.argv[2] || process.env.DEAD_CHAT_BASE_URL || 'https://wesley.thesisko.com/chat';
+const baseUrl = rawBase.replace(/\/+$/, '');
+const healthUrl = `${baseUrl}/health`;
+const wsUrl = `${baseUrl.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:')}/ws?probe=1`;
+
+function withTimeout(promise, ms, label) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+async function checkHealth() {
+  const res = await fetch(healthUrl, { headers: { 'User-Agent': 'dead-chat-smoke/1.0' } });
+  assert.equal(res.status, 200, `health returned ${res.status}`);
+  const body = await res.json();
+  assert.equal(body.ok, true, 'health ok=true');
+  assert.equal(body.service, 'dead-chat', 'health service name');
+  assert.equal(typeof body.connected_clients, 'number', 'health connected_clients number');
+  return body;
+}
+
+async function checkWebSocketProbe() {
+  assert.equal(typeof WebSocket, 'function', 'global WebSocket is available (Node 22+)');
+
+  return await withTimeout(new Promise((resolve, reject) => {
+    const ws = new WebSocket(wsUrl);
+
+    ws.addEventListener('message', (event) => {
+      try {
+        const body = JSON.parse(String(event.data));
+        assert.equal(body.type, 'probe', 'probe message type');
+        assert.equal(body.ok, true, 'probe ok=true');
+        assert.equal(body.service, 'dead-chat', 'probe service name');
+        resolve(body);
+      } catch (err) {
+        reject(err);
+      } finally {
+        try { ws.close(); } catch {}
+      }
+    });
+
+    ws.addEventListener('error', () => reject(new Error('websocket probe failed')));
+  }), 5000, 'websocket probe');
+}
+
+(async () => {
+  const health = await checkHealth();
+  const probe = await checkWebSocketProbe();
+  console.log(`ok dead-chat smoke ${baseUrl} version=${health.version}/${probe.version} clients=${health.connected_clients}`);
+})().catch((err) => {
+  console.error(`not ok dead-chat smoke ${baseUrl}: ${err.message}`);
+  process.exit(1);
+});
