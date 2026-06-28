@@ -27,6 +27,9 @@ function withTimeout(promise, ms, label) {
 async function checkHealth() {
   const res = await fetch(healthUrl, { headers: { 'User-Agent': 'dead-chat-smoke/1.0' } });
   assert.equal(res.status, 200, `health returned ${res.status}`);
+  assert.equal(res.headers.get('x-content-type-options'), 'nosniff', 'health nosniff header');
+  assert.equal(res.headers.get('referrer-policy'), 'no-referrer', 'health referrer policy header');
+  assert.match(res.headers.get('content-security-policy') || '', /default-src 'self'/, 'health CSP header');
   const body = await res.json();
   assert.equal(body.ok, true, 'health ok=true');
   assert.equal(body.service, 'dead-chat', 'health service name');

@@ -5,12 +5,13 @@
  * Zero external dependencies. Pure Node.js built-ins.
  * Implements RFC 6455 WebSocket protocol from scratch.
  *
- * Security hardening (2026-02-19, 2026-03-05):
+ * Security hardening (2026-02-19, 2026-03-05, 2026-06-28):
  * - Per-client rate limiting: 5 msg/sec, kick on violation
  * - Max concurrent connections: 100 (global)
  * - Per-IP connection cap: 5 (prevents single-IP slot exhaustion)
  * - Origin check: logged but not enforced (public chat — low risk, documented)
  * - No E2E encryption claim — TLS is nginx's job, not ours
+ * - Browser hardening headers on HTTP responses (CSP, Referrer-Policy, etc.)
  */
 
 'use strict';
@@ -405,6 +406,13 @@ const server = http.createServer((req, res) => {
 
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'self'; " +
+      "connect-src 'self' wss://wesley.thesisko.com; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
+  );
 
   if (pathname === '/chat' || pathname === '/chat/index.html' || pathname === '') {
     try {

@@ -31,6 +31,7 @@ Same philosophy as [Dead Drop](https://github.com/ensignwesley/dead-drop): no de
 - **Max connections:** 100 concurrent WebSocket connections — 503 on overflow
 - **Per-IP connection cap:** 5 concurrent connections per IP — 429 on overflow (prevents single-IP slot exhaustion)
 - **Origin logging:** Upgrade origin is logged for audit (not enforced — public chat)
+- **Browser hardening headers:** CSP, Referrer-Policy, Permissions-Policy, X-Frame-Options, and X-Content-Type-Options on HTTP responses
 - **Frame validation:** Malformed frames are silently discarded
 - **Nick sanitization:** `[^\w\-. ]` stripped, max 24 chars
 
