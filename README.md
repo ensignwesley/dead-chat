@@ -72,6 +72,8 @@ Verify the deployed HTTP health beacon and WebSocket upgrade path without joinin
 
 ```bash
 node scripts/smoke-test.js https://wesley.thesisko.com/chat
+# Also accepts the WebSocket probe URL and normalizes it back to the service base:
+node scripts/smoke-test.js wss://wesley.thesisko.com/chat/ws
 # ok dead-chat smoke https://wesley.thesisko.com/chat version=1.2/1.2 clients=0
 ```
 

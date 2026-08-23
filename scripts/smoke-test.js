@@ -12,7 +12,19 @@
 const assert = require('assert/strict');
 
 const rawBase = process.argv[2] || process.env.DEAD_CHAT_BASE_URL || 'https://wesley.thesisko.com/chat';
-const baseUrl = rawBase.replace(/\/+$/, '');
+
+function normalizeBaseUrl(raw) {
+  const parsed = new URL(raw.replace(/\/+$/, ''));
+  if (parsed.protocol === 'ws:' || parsed.protocol === 'wss:') {
+    parsed.protocol = parsed.protocol === 'wss:' ? 'https:' : 'http:';
+    parsed.pathname = parsed.pathname.replace(/\/ws\/?$/, '') || '/chat';
+    parsed.search = '';
+    parsed.hash = '';
+  }
+  return parsed.toString().replace(/\/+$/, '');
+}
+
+const baseUrl = normalizeBaseUrl(rawBase);
 const healthUrl = `${baseUrl}/health`;
 const wsUrl = `${baseUrl.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:')}/ws?probe=1`;
 
