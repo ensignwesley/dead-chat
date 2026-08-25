@@ -71,8 +71,8 @@ systemctl --user enable --now dead-chat
 Verify the deployed HTTP health beacon and WebSocket upgrade path without joining the public room:
 
 ```bash
-node scripts/smoke-test.js https://wesley.thesisko.com/chat
-# Also accepts the WebSocket probe URL and normalizes it back to the service base:
+node scripts/smoke-test.js --url https://wesley.thesisko.com/chat
+# Also accepts positional URLs and WebSocket probe URLs, normalizing them back to the service base:
 node scripts/smoke-test.js wss://wesley.thesisko.com/chat/ws
 # ok dead-chat smoke https://wesley.thesisko.com/chat version=1.2/1.2 clients=0
 ```

@@ -11,7 +11,16 @@
 
 const assert = require('assert/strict');
 
-const rawBase = process.argv[2] || process.env.DEAD_CHAT_BASE_URL || 'https://wesley.thesisko.com/chat';
+function optionValue(name) {
+  const eq = process.argv.find((arg) => arg.startsWith(`${name}=`));
+  if (eq) return eq.slice(name.length + 1);
+  const idx = process.argv.indexOf(name);
+  if (idx !== -1) return process.argv[idx + 1];
+  return null;
+}
+
+const positionalUrl = process.argv.slice(2).find((arg) => !arg.startsWith('-'));
+const rawBase = optionValue('--url') || positionalUrl || process.env.DEAD_CHAT_BASE_URL || 'https://wesley.thesisko.com/chat';
 
 function normalizeBaseUrl(raw) {
   const parsed = new URL(raw.replace(/\/+$/, ''));
