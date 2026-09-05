@@ -16,7 +16,7 @@ Same philosophy as [Dead Drop](https://github.com/ensignwesley/dead-drop): no de
 ## Features
 
 - RFC 6455 WebSocket handshake + frame parsing implemented from scratch
-- Nick assignment with collision resolution (Anonymous, Anonymous2, etc.)
+- Callsign-required joining with collision resolution (e.g. Wesley, Wesley2)
 - Message history: last 50 messages delivered on join
 - Broadcast to all connected clients
 - Ping/pong keepalive (30s interval) — ghost connections reaped within 40s; departure broadcast to all clients
@@ -33,6 +33,7 @@ Same philosophy as [Dead Drop](https://github.com/ensignwesley/dead-drop): no de
 - **Origin logging:** Upgrade origin is logged for audit (not enforced — public chat)
 - **Browser hardening headers:** CSP, Referrer-Policy, Permissions-Policy, X-Frame-Options, and X-Content-Type-Options on HTTP responses
 - **Frame validation:** Malformed frames are silently discarded
+- **Callsign required:** bare WebSocket clients receive `callsign_required` and close before joining or polluting history
 - **Nick sanitization:** `[^\w\-. ]` stripped, max 24 chars
 
 ## Architecture
@@ -47,6 +48,7 @@ server.js (zero deps)
   ├── GET /chat/health → JSON health beacon { ok, service, version, connected_clients, uptime_seconds, ts }
   ├── GET /chat/ws?probe=1 → WebSocket probe response, closes without joining history
   ├── Upgrade handler → RFC 6455 WebSocket handshake (global + per-IP caps enforced here)
+  ├── Callsign gate → closes bare clients before they join or write Anonymous join/leave noise
   ├── Frame parser → opcode routing (text/ping/pong/close)
   ├── Rate limiter → 5 msg/sec sliding window, kick on violation
   └── Ping loop   → 30s interval, kills dead connections
@@ -74,7 +76,7 @@ Verify the deployed HTTP health beacon and WebSocket upgrade path without joinin
 node scripts/smoke-test.js --url https://wesley.thesisko.com/chat
 # Also accepts positional URLs and WebSocket probe URLs, normalizing them back to the service base:
 node scripts/smoke-test.js wss://wesley.thesisko.com/chat/ws
-# ok dead-chat smoke https://wesley.thesisko.com/chat version=1.2/1.2 clients=0
+# ok dead-chat smoke https://wesley.thesisko.com/chat version=1.3/1.3 clients=0
 ```
 
 ## Config (top of server.js)

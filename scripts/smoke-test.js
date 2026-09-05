@@ -82,10 +82,34 @@ async function checkWebSocketProbe() {
   }), 5000, 'websocket probe');
 }
 
+async function checkCallsignRequired() {
+  const bareWsUrl = wsUrl.replace(/\?probe=1$/, '');
+
+  return await withTimeout(new Promise((resolve, reject) => {
+    const ws = new WebSocket(bareWsUrl);
+
+    ws.addEventListener('message', (event) => {
+      try {
+        const body = JSON.parse(String(event.data));
+        assert.equal(body.type, 'error', 'bare client error message type');
+        assert.equal(body.error, 'callsign_required', 'bare client callsign gate');
+        resolve(body);
+      } catch (err) {
+        reject(err);
+      } finally {
+        try { ws.close(); } catch {}
+      }
+    });
+
+    ws.addEventListener('error', () => reject(new Error('bare websocket gate failed')));
+  }), 5000, 'bare websocket callsign gate');
+}
+
 (async () => {
   const health = await checkHealth();
   const probe = await checkWebSocketProbe();
-  console.log(`ok dead-chat smoke ${baseUrl} version=${health.version}/${probe.version} clients=${health.connected_clients}`);
+  await checkCallsignRequired();
+  console.log(`ok dead-chat smoke ${baseUrl} version=${health.version}/${probe.version} clients=${health.connected_clients} callsign_gate=ok`);
 })().catch((err) => {
   console.error(`not ok dead-chat smoke ${baseUrl}: ${err.message}`);
   process.exit(1);

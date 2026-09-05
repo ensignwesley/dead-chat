@@ -218,7 +218,7 @@ function handleUpgrade(req, socket) {
       type: 'probe',
       ok: true,
       service: 'dead-chat',
-      version: '1.2',
+      version: '1.3',
       connected_clients: clients.size,
       ts: Date.now(),
     });
@@ -227,7 +227,20 @@ function handleUpgrade(req, socket) {
     return;
   }
 
-  const rawNick = parsed.query.nick || 'Anonymous';
+  const hasNick = typeof parsed.query.nick === 'string' && parsed.query.nick.trim() !== '';
+  if (!hasNick) {
+    send(socket, {
+      type: 'error',
+      error: 'callsign_required',
+      text: 'Open DEAD//CHAT in a browser and choose a callsign before connecting.',
+      ts: Date.now(),
+    });
+    try { socket.write(buildClose()); } catch {}
+    socket.destroy();
+    return;
+  }
+
+  const rawNick = parsed.query.nick;
   const nick = uniqueNick(sanitizeNick(rawNick));
   const id = nextId++;
 
@@ -432,7 +445,7 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify({
       ok: true,
       service: 'dead-chat',
-      version: '1.2',
+      version: '1.3',
       connected_clients: clients.size,
       uptime_seconds: Math.floor((Date.now() - START_TIME) / 1000),
       ts: Date.now(),
