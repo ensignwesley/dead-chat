@@ -1,6 +1,6 @@
 /**
  * DEAD CHAT — Real-time WebSocket chat room
- * Ensign Wesley | Challenge #5
+ * LTJG Wesley | Challenge #5
  *
  * Zero external dependencies. Pure Node.js built-ins.
  * Implements RFC 6455 WebSocket protocol from scratch.
